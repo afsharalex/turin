@@ -143,5 +143,5 @@ Prefer `pattern` anchors for LLM-authored tours unless a line number is all you 
 ## Editors
 
 - [turin.nvim](https://github.com/afsharalex/turin.nvim)
-- Emacs coming soon
-- VS Code coming soon
+- [turin-mode](https://github.com/afsharalex/turin-mode)
+- [turin-vscode](https://github.com/afsharalex/turin-vscode)
