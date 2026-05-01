@@ -122,6 +122,15 @@ Play it:
 turin play
 ```
 
+During playback, `n`/`]` and `p`/`[` move between stops. `j`/`k` scroll the active pane, `tab` switches the active pane, left/right focus the code or commentary pane, and the mouse wheel scrolls whichever pane the cursor is over.
+
+Disable source syntax highlighting when startup performance matters:
+
+```sh
+turin play --no-color
+turin play -nc
+```
+
 Print the format reference:
 
 ```sh

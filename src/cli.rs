@@ -6,6 +6,22 @@ use crate::util::{die, slugify};
 
 const VERSION: &str = "0.0.1";
 
+pub fn parse() -> Cli {
+    Cli::parse_from(normalize_args(std::env::args()))
+}
+
+fn normalize_args(args: impl IntoIterator<Item = String>) -> Vec<String> {
+    args.into_iter()
+        .map(|arg| {
+            if arg == "-nc" {
+                "--no-color".to_string()
+            } else {
+                arg
+            }
+        })
+        .collect()
+}
+
 #[derive(Parser, Debug)]
 #[command(name = "turin", version = VERSION, about = "Author and play guided codebase tours")]
 pub struct Cli {
@@ -17,6 +33,10 @@ pub struct Cli {
 
     #[arg(short, long, global = true)]
     pub quiet: bool,
+
+    /// Render source without syntax highlighting.
+    #[arg(long, global = true)]
+    pub no_color: bool,
 
     #[command(subcommand)]
     pub command: Command,
@@ -187,6 +207,29 @@ mod tests {
 
     fn empty() -> StopArgs {
         StopArgs::default()
+    }
+
+    #[test]
+    fn normalize_args_maps_nc_to_no_color() {
+        let args = normalize_args(["turin", "play", "-nc"].into_iter().map(String::from));
+        assert_eq!(args, vec!["turin", "play", "--no-color"]);
+    }
+
+    #[test]
+    fn parse_no_color_after_play() {
+        let cli = Cli::try_parse_from(["turin", "play", "--no-color"]).unwrap();
+        assert!(cli.no_color);
+        assert!(matches!(cli.command, Command::Play));
+    }
+
+    #[test]
+    fn parse_normalized_nc_after_play() {
+        let cli = Cli::try_parse_from(normalize_args(
+            ["turin", "play", "-nc"].into_iter().map(String::from),
+        ))
+        .unwrap();
+        assert!(cli.no_color);
+        assert!(matches!(cli.command, Command::Play));
     }
 
     #[test]

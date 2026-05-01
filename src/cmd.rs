@@ -119,8 +119,10 @@ pub fn list(turin_dir: &Path) {
     }
 }
 
-pub fn play(turin_dir: &Path) {
-    use crossterm::event::{self, Event as CtEvent, KeyEventKind};
+pub fn play(turin_dir: &Path, color: bool) {
+    use crossterm::event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event as CtEvent, KeyEventKind,
+    };
     use crossterm::execute;
     use crossterm::terminal::{
         EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
@@ -128,11 +130,11 @@ pub fn play(turin_dir: &Path) {
     use ratatui::Terminal;
     use ratatui::backend::CrosstermBackend;
 
-    let mut player = play::load(turin_dir);
+    let mut player = play::load(turin_dir, color);
 
     enable_raw_mode().unwrap_or_else(|e| die(format!("enabling raw mode: {}", e)));
     let mut stdout = io::stdout();
-    if let Err(e) = execute!(stdout, EnterAlternateScreen) {
+    if let Err(e) = execute!(stdout, EnterAlternateScreen, EnableMouseCapture) {
         let _ = disable_raw_mode();
         die(format!("entering alternate screen: {}", e));
     }
@@ -141,7 +143,7 @@ pub fn play(turin_dir: &Path) {
         Ok(t) => t,
         Err(e) => {
             let _ = disable_raw_mode();
-            let _ = execute!(io::stdout(), LeaveAlternateScreen);
+            let _ = execute!(io::stdout(), DisableMouseCapture, LeaveAlternateScreen);
             die(format!("creating terminal: {}", e));
         }
     };
@@ -149,21 +151,36 @@ pub fn play(turin_dir: &Path) {
     let result = (|| -> io::Result<()> {
         loop {
             terminal.draw(|f| play::render(&player, f))?;
-            if let CtEvent::Key(key) = event::read()? {
-                if key.kind != KeyEventKind::Press {
-                    continue;
+            match event::read()? {
+                CtEvent::Key(key) => {
+                    if key.kind != KeyEventKind::Press {
+                        continue;
+                    }
+                    if let Some(ev) = play::key_to_event(key)
+                        && matches!(player.handle(ev), play::Outcome::Exit)
+                    {
+                        return Ok(());
+                    }
                 }
-                if let Some(ev) = play::key_to_event(key)
-                    && matches!(player.handle(ev), play::Outcome::Exit)
-                {
-                    return Ok(());
+                CtEvent::Mouse(mouse) => {
+                    let area = terminal.size()?.into();
+                    if let Some(ev) = play::mouse_to_event(mouse, area)
+                        && matches!(player.handle(ev), play::Outcome::Exit)
+                    {
+                        return Ok(());
+                    }
                 }
+                _ => {}
             }
         }
     })();
 
     let _ = disable_raw_mode();
-    let _ = execute!(terminal.backend_mut(), LeaveAlternateScreen);
+    let _ = execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    );
     let _ = terminal.show_cursor();
 
     if let Err(e) = result {

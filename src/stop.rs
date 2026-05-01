@@ -6,16 +6,13 @@ use serde::Deserialize;
 use crate::cli::{AnchorKind, StopArgs};
 use crate::util::{die, toml_quote};
 
-/// Frontmatter shape, as parsed from a stop file. Used by `list` (and later `play`).
+/// Frontmatter shape, as parsed from a stop file.
 #[derive(Deserialize, Debug)]
-#[allow(dead_code)] // `id` and `highlight` are read by `play` (not yet implemented).
 pub struct StopFrontmatter {
     pub file: String,
     pub anchor: Anchor,
     #[serde(default)]
     pub title: Option<String>,
-    #[serde(default)]
-    pub id: Option<String>,
     #[serde(default)]
     pub highlight: Option<toml::Value>,
 }
@@ -280,7 +277,6 @@ mod tests {
                 query: query.map(|s| s.to_string()),
             },
             title: None,
-            id: None,
             highlight: None,
         }
     }

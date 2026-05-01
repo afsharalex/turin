@@ -135,7 +135,12 @@ them but does not block.
 
   turin list                Print stops as a table.
 
-  turin play                Open the interactive TUI playback.
+  turin play [--no-color]   Open the interactive TUI playback. `--no-color`
+                            (or `-nc`) disables source syntax highlighting.
+                            In playback, n/] and p/[ move between stops,
+                            tab switches panes, left/right focus panes, j/k
+                            scroll the active pane, and the mouse wheel
+                            scrolls the pane under the cursor.
 
   turin quickstart          Print this reference.
 
