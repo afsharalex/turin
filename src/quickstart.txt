@@ -1,0 +1,206 @@
+# Turin quickstart
+
+Turin authors guided tours of a codebase. A tour is a sequence of stops; each
+stop points at a location in the codebase and carries markdown commentary.
+Readers play the tour back in the terminal (`turin play`) or inside an editor
+(turin.nvim, turin-mode, turin-vscode).
+
+This document is the format reference. If you are an LLM being asked to create
+or edit stops, everything you need is below — do not invent additional fields.
+
+## On-disk layout
+
+Each project has at most one tour, stored in `.turin/` at the project root
+(by default the cwd, or whatever path was passed via `--project-root`):
+
+    <project-root>/
+    └── .turin/
+        ├── tour.json     # tour metadata + ordered list of stop files
+        ├── entry.md      # one stop
+        ├── dispatch.md   # one stop
+        └── buffer.md     # one stop
+
+Stop ordering comes from the `stops` array in `tour.json`, NOT from filenames.
+Files in `.turin/` not listed in `stops` are ignored by the player.
+
+The index is JSON so editor plugins (Lua/Elisp/TypeScript) can parse it with
+their built-in JSON support and avoid third-party dependencies.
+
+## tour.json
+
+    {
+      "tour": {
+        "title": "Lexer architecture",
+        "description": "How the hand-written lexer feeds the streaming parser.",
+        "author": "alex",
+        "created": "2026-04-29"
+      },
+      "stops": [
+        "entry.md",
+        "dispatch.md",
+        "buffer.md"
+      ]
+    }
+
+`description`, `author`, and `created` are optional. The `stops` array is the
+index — its order defines the tour order.
+
+## Stop file format
+
+A stop file is markdown with TOML frontmatter, delimited by `---` lines.
+Everything between the `---` lines is TOML; everything after is the markdown
+commentary body. TOML is used here (not JSON) because stop files are
+hand-edited and TOML's multi-line strings, comments, and lower quoting noise
+matter for prose.
+
+    ---
+    id = "entry"
+    file = "src/parser/lexer.rs"
+    anchor = { kind = "pattern", value = "fn tokenize" }
+    title = "Entry point"
+    highlight = { lines = 8 }
+    ---
+
+    The lexer is hand-written rather than generated.
+    Note how it returns an iterator instead of a Vec —
+    this matters later for the streaming parser.
+
+### Frontmatter fields
+
+  file        (required)  Path to the source file, relative to project root.
+  anchor      (required)  How to locate the stop within the file. See below.
+  title       (optional)  Short title shown in the player UI.
+                          Defaults to the filename slug.
+  id          (optional)  Stable id for branches/prerequisites.
+                          Defaults to the filename without extension.
+  highlight   (optional)  Visual emphasis past the single anchor line.
+
+### Anchors (in order of robustness — prefer the most robust available)
+
+  Line:        anchor = { kind = "line", value = 42 }
+               Brittle. Line numbers rot on the first edit. Use only for
+               quick drafts.
+
+  Pattern:     anchor = { kind = "pattern", value = "fn tokenize" }
+               First regex match in the file. Survives line edits, but
+               breaks if the matched text is renamed. The default choice
+               for most stops.
+
+  Tree-sitter: anchor = { kind = "treesitter", query = "(function_item name: (identifier) @n (#eq? @n \"tokenize\"))" }
+               S-expression query against the file's parse tree. Survives
+               reformatting and most refactors. The plugin's host editor
+               runs the query; the CLI player has bundled grammars for
+               common languages and falls back to regex otherwise.
+
+### Highlights (optional)
+
+  highlight = { lines = 8 }
+      Highlight 8 lines starting at the anchor.
+
+  highlight = { pattern_end = "^}" }
+      Highlight from the anchor through the next match of pattern_end.
+      Useful for "this whole function".
+
+  highlight = { treesitter_node = true }
+      With a treesitter anchor, highlight the entire matched node.
+
+### Branches and prerequisites (optional)
+
+    ---
+    id = "dispatch"
+    file = "src/parser/lexer.rs"
+    anchor = { ... }
+
+    [branches]
+    "deep dive on tokens" = "stops:tokens-overview"
+    "skip to parser"      = "stops:parser-entry"
+
+    prerequisites = ["overview"]
+    ---
+
+Branches are presented as a menu after the user reads the stop. Branch
+values must be `stops:<id>` referring to a stop id in the same tour.
+Prerequisites are advisory — the player notes if the user hasn't visited
+them but does not block.
+
+## CLI commands
+
+  turin new [flags...]      Create `.turin/` and tour.json. With stop flags,
+                            also seed the first stop.
+
+  turin add [flags...]      Create a new stop file and insert it into the
+                            `stops` array. Without `--position`, appends to
+                            the end. Without flags, prompts interactively
+                            for required fields.
+
+  turin list                Print stops as a table.
+
+  turin play                Open the interactive TUI playback.
+
+  turin quickstart          Print this reference.
+
+### Stop flags (shared by `new` and `add`)
+
+  --file <path>             Source file the stop points at.
+  --anchor-kind <kind>      line | pattern | treesitter
+  --anchor <value>          Line number, regex pattern, or query string.
+  --title <text>            Short title.
+  --body <text>             Inline commentary body.
+  --body-file <path>        Read body from a file (mutually exclusive with --body).
+  --id <id>                 Stable stop id.
+  --highlight-lines <n>     Highlight N lines starting at the anchor.
+  --slug <text>             Filename slug. Defaults from --title.
+
+### `add`-only flag
+
+  --position <n>            1-based index to insert the new stop at. Default:
+                            append. Valid range is 1..=len+1 (the existing
+                            stops, plus the position just past the end).
+
+## End-to-end example
+
+Initialize:
+
+    $ turin new \
+        --title "Entry point" \
+        --file src/parser/lexer.rs \
+        --anchor-kind pattern \
+        --anchor "fn tokenize" \
+        --body "The lexer is hand-written rather than generated."
+
+This creates `.turin/tour.json` and `.turin/entry-point.md`, with the stop
+appended to the `stops` array.
+
+Add another stop:
+
+    $ turin add \
+        --title "Token dispatch" \
+        --file src/parser/lexer.rs \
+        --anchor-kind pattern \
+        --anchor "match self.peek" \
+        --highlight-lines 8 \
+        --body-file notes/dispatch.md
+
+Inspect:
+
+    $ turin list
+
+Play:
+
+    $ turin play
+
+## Authoring guidance for LLMs
+
+When asked to create stops:
+
+  1. Prefer pattern anchors over line anchors. Use treesitter anchors when
+     the user wants robustness against refactors.
+  2. Keep titles short (≤ 5 words). They appear in the TUI header.
+  3. Bodies should explain WHY the code is the way it is — context that
+     isn't obvious from reading the code itself. Avoid restating what the
+     code does.
+  4. Sequence stops to follow the reader's likely path through the system,
+     not the order files appear on disk.
+  5. Use `id` whenever a stop is referenced by another stop's branches or
+     prerequisites. Otherwise it's optional.
+  6. Do not invent frontmatter fields beyond those listed above.
